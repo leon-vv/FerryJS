@@ -1,0 +1,5 @@
+package ferryjs
+
+pkgs = record_
+
+modules = FerryJS
