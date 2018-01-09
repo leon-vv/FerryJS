@@ -12,34 +12,39 @@ public export
 data FromJS : Type -> Type where
   FromJSFun : (Ptr -> t) -> FromJS t
 
-export
 %hint
+export
+fromJSPtr : FromJS Ptr
+fromJSPtr = FromJSFun id
+
+%hint
+export
 fromJSToString : FromJS String
 fromJSToString = FromJSFun (believe_me)
 
-export
 %hint
+export
 fromJSToInt : FromJS Int
 fromJSToInt = FromJSFun believe_me
 
+%hint
 export
 fromJSToDouble : FromJS Double
 fromJSToDouble = FromJSFun believe_me
 
+%hint
 export
 fromJSToBool : FromJS Bool
 fromJSToBool = FromJSFun (\ptr => (believe_me {b=Int} ptr) >= 1)
 
-export
 indexArray : Ptr -> Nat -> Ptr
 indexArray ptr idx = unsafePerformIO $ jscall "(%0)[%1]" (Ptr -> Int -> JS_IO Ptr) ptr (cast idx)
 
-export
 length : Ptr -> Nat
 length ptr = cast $ unsafePerformIO $ jscall "%0.length" (Ptr -> JS_IO Int) ptr
 
-export
 %hint
+export
 fromJSToList : FromJS a -> FromJS (List a)
 fromJSToList (FromJSFun f) = FromJSFun (\ptr => convert ptr Z (length ptr))
                 where convert : Ptr -> Nat -> Nat -> List a
@@ -49,8 +54,8 @@ fromJSToList (FromJSFun f) = FromJSFun (\ptr => convert ptr Z (length ptr))
                           (let val = f (indexArray ptr idx)
                           in val :: assert_total (convert ptr (S idx) length))
 
-export
 %hint
+export
 fromJSRecNil : FromJS (Record [])
 fromJSRecNil = FromJSFun (const RecNil)
 
@@ -74,6 +79,11 @@ fromJS {fjs=FromJSFun f} ptr = f ptr
 public export
 data ToJS : Type -> Type where
   ToJSFun : (t -> Ptr) -> ToJS t
+
+%hint
+export
+toJSPtr : ToJS Ptr
+toJSPtr = ToJSFun id
 
 %hint
 export
