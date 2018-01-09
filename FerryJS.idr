@@ -9,24 +9,26 @@ jscall : (fname : String) -> (ty : Type) ->
 jscall fname ty = foreign FFI_JS fname ty
 
 public export
-interface FromJS to where
-  fromJS : Ptr -> to
+data FromJS : Type -> Type where
+  FromJSFun : (Ptr -> t) -> FromJS t
 
 export
-implementation FromJS String where
-  fromJS = believe_me
+%hint
+fromJSToString : FromJS String
+fromJSToString = FromJSFun (believe_me)
 
 export
-implementation FromJS Int where
-  fromJS = (cast {from=Double} {to=Int}) . believe_me
+%hint
+fromJSToInt : FromJS Int
+fromJSToInt = FromJSFun believe_me
 
 export
-implementation FromJS Double where
-  fromJS = believe_me
+fromJSToDouble : FromJS Double
+fromJSToDouble = FromJSFun believe_me
 
 export
-implementation FromJS Bool where
-  fromJS ptr = (believe_me {b=Int} ptr) >= 1
+fromJSToBool : FromJS Bool
+fromJSToBool = FromJSFun (\ptr => (believe_me {b=Int} ptr) >= 1)
 
 export
 indexArray : Ptr -> Nat -> Ptr
@@ -37,18 +39,20 @@ length : Ptr -> Nat
 length ptr = cast $ unsafePerformIO $ jscall "%0.length" (Ptr -> JS_IO Int) ptr
 
 export
-FromJS a => FromJS (List a) where
-  fromJS ptr =  convert ptr Z (length ptr)
-    where convert : FromJS a => Ptr -> Nat -> Nat -> List a
-          convert ptr idx length =
-            if idx == length then []
-            else
-              (let val = (fromJS {to=a} (indexArray ptr idx))
-               in val :: assert_total (convert ptr (S idx) length))
+%hint
+fromJSToList : FromJS a -> FromJS (List a)
+fromJSToList (FromJSFun f) = FromJSFun (\ptr => convert ptr Z (length ptr))
+                where convert : Ptr -> Nat -> Nat -> List a
+                      convert ptr idx length =
+                        if idx == length then []
+                        else
+                          (let val = f (indexArray ptr idx)
+                          in val :: assert_total (convert ptr (S idx) length))
 
 export
-FromJS (Record []) where
-  fromJS _ = RecNil
+%hint
+fromJSRecNil : FromJS (Record [])
+fromJSRecNil = FromJSFun (const RecNil)
 
 accessObject : Ptr -> String -> Ptr
 accessObject ptr str =
@@ -56,32 +60,43 @@ accessObject ptr str =
   in unsafePerformIO io
 
 export
-(FromJS (Record xs), FromJS t) => FromJS (Record ((k, t)::xs)) where
-  fromJS {k} {t} {xs} ptr =
-    let rec = fromJS {to=Record xs} ptr
-    in let fieldPtr = accessObject ptr k
-    in RecCons k (fromJS {to=t} fieldPtr) rec
+%hint
+fromJSRecord : FromJS t -> FromJS (Record xs) -> FromJS (Record ((k, t)::xs))
+fromJSRecord {k} (FromJSFun ft) (FromJSFun fxs) = FromJSFun (\ptr =>
+              let rec = fxs ptr
+              in let fieldPtr = accessObject ptr k
+              in RecCons k (ft fieldPtr) rec)
+
+export
+fromJS : {auto fjs: FromJS to} -> Ptr -> to
+fromJS {fjs=FromJSFun f} ptr = f ptr
 
 public export
-interface ToJS from where
-  toJS : from -> Ptr
+data ToJS : Type -> Type where
+  ToJSFun : (t -> Ptr) -> ToJS t
 
+%hint
 export
-implementation ToJS String where
-  toJS = believe_me
+fromIntToJS : ToJS Int
+fromIntToJS = ToJSFun believe_me
 
+%hint
 export
-implementation ToJS Int where
-  toJS = believe_me
+fromStringToJS : ToJS String
+fromStringToJS = ToJSFun believe_me
 
+%hint
 export
-implementation ToJS Double where
-  toJS = believe_me
+fromDoubleToJS : ToJS Double
+fromDoubleToJS = ToJSFun believe_me
 
+%hint
 export
-implementation ToJS Bool where
-  toJS True = unsafePerformIO $ jscall "true" (JS_IO Ptr)
-  toJS False = unsafePerformIO $ jscall "false" (JS_IO Ptr)
+fromBoolToJS : ToJS Bool
+fromBoolToJS = ToJSFun convert
+  where convert : Bool -> Ptr
+        convert True = unsafePerformIO $ jscall "true" (JS_IO Ptr)
+        convert False = unsafePerformIO $ jscall "false" (JS_IO Ptr)
 
 empty_ : JS_IO Ptr
 empty_ = jscall "new Array()" (JS_IO Ptr)
@@ -94,30 +109,37 @@ push = jscall "%0.push(%1)" (Ptr -> Ptr -> JS_IO ())
 -- from othe parts of the code. Allocating memory
 -- is not considered a side effect. For these reasons
 -- we may use unsafePerformIO.
+%hint
 export
-ToJS a => ToJS (List a) where
-  toJS {a} lst = (unsafePerformIO $ foldl append empty_ lst)
-                  where append : ToJS a => JS_IO Ptr -> a -> JS_IO Ptr
-                        append io val = do
-                          arr <- io
-                          push arr (toJS val)
-                          pure arr
+fromListToJS : ToJS a -> ToJS (List a)
+fromListToJS (ToJSFun f) =
+  ToJSFun (unsafePerformIO . foldl append empty_)
+    where append : JS_IO Ptr -> a -> JS_IO Ptr
+          append io val = do
+            arr <- io
+            push arr (f val)
+            pure arr
 
+%hint
 export
-implementation ToJS (Record []) where
-  toJS RecNil = unsafePerformIO $ jscall "{}" (JS_IO Ptr)
+fromRecNilToJS : ToJS (Record [])
+fromRecNilToJS= ToJSFun (\RecNil => unsafePerformIO $ jscall "{}" (JS_IO Ptr))
 
 setObjectField : Ptr -> String -> Ptr -> JS_IO ()
 setObjectField = jscall "(%0)[%1] = %2" (Ptr -> String -> Ptr -> JS_IO ()) 
 
 -- See comment above the 'ToJS (List a)' implementation
+%hint
 export
-(ToJS (Record xs), ToJS t) => ToJS (Record ((k, t)::xs)) where
-  toJS (RecCons key val rest) = let obj = toJS rest
-                                in unsafePerformIO $ do
-                                  setObjectField obj key (toJS val)
-                                  pure obj
-
+fromRecordToJS : ToJS t -> ToJS (Record xs) -> ToJS (Record ((k, t)::xs))
+fromRecordToJS (ToJSFun ft) (ToJSFun fxs) = 
+  ToJSFun (\(RecCons key val rest) => let obj = fxs rest
+                                      in unsafePerformIO $ do
+                                        setObjectField obj key (ft val)
+                                        pure obj)
+export
+toJS : {auto tjs: ToJS t} -> t -> Ptr
+toJS {tjs=ToJSFun f} val = f val
 
 
 
