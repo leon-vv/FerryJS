@@ -8,34 +8,53 @@ jscall : (fname : String) -> (ty : Type) ->
           {auto fty : FTy FFI_JS [] ty} -> ty
 jscall fname ty = foreign FFI_JS fname ty
 
+export
+stringify : Ptr -> String
+stringify = unsafePerformIO . jscall "JSON.stringify(%0)" (Ptr -> JS_IO String)
+
 public export
 data FromJS : Type -> Type where
-  FromJSFun : (Ptr -> t) -> FromJS t
+  FromJSFun : (Ptr -> Maybe t) -> FromJS t
+
+-- Unsafe
+toBool : Ptr -> Bool
+toBool ptr = believe_me {b=Int} ptr >= 1
+
+
+check : String -> Ptr -> Bool
+check c ptr = unsafePerformIO $ map toBool $ jscall c (Ptr -> JS_IO Ptr) ptr
+
+withCheck : String -> (Ptr -> t) -> FromJS t
+withCheck c f = FromJSFun (\ptr => if check c ptr then Just (f ptr)
+                                                  else Nothing)
+                    
+withTypeOfCheck : String -> (Ptr -> t) -> FromJS t
+withTypeOfCheck type = withCheck ("typeof %0 == \"" ++ type ++ "\"")
 
 %hint
 export
 fromJSPtr : FromJS Ptr
-fromJSPtr = FromJSFun id
+fromJSPtr = FromJSFun (Just . id)
 
 %hint
 export
 fromJSToString : FromJS String
-fromJSToString = FromJSFun (believe_me)
+fromJSToString = withTypeOfCheck "string" believe_me
 
 %hint
 export
 fromJSToInt : FromJS Int
-fromJSToInt = FromJSFun believe_me
+fromJSToInt = withTypeOfCheck "number" believe_me
 
 %hint
 export
 fromJSToDouble : FromJS Double
-fromJSToDouble = FromJSFun believe_me
+fromJSToDouble = withTypeOfCheck "number" believe_me
 
 %hint
 export
 fromJSToBool : FromJS Bool
-fromJSToBool = FromJSFun (\ptr => (believe_me {b=Int} ptr) >= 1)
+fromJSToBool = withTypeOfCheck "boolean" toBool 
 
 indexArray : Ptr -> Nat -> Ptr
 indexArray ptr idx = unsafePerformIO $ jscall "(%0)[%1]" (Ptr -> Int -> JS_IO Ptr) ptr (cast idx)
@@ -43,26 +62,31 @@ indexArray ptr idx = unsafePerformIO $ jscall "(%0)[%1]" (Ptr -> Int -> JS_IO Pt
 length : Ptr -> Nat
 length ptr = cast $ unsafePerformIO $ jscall "%0.length" (Ptr -> JS_IO Int) ptr
 
+arrayCheck : Ptr -> Bool
+arrayCheck = check ("typeof %0 == \"object\" && %0.constructor.name == \"Array\"")
+
 %hint
 export
 fromJSToList : FromJS a -> FromJS (List a)
-fromJSToList (FromJSFun f) = FromJSFun (\ptr => convert ptr Z (length ptr))
-                where convert : Ptr -> Nat -> Nat -> List a
+fromJSToList (FromJSFun f) = FromJSFun (\ptr => if arrayCheck ptr
+                                                  then convert ptr Z (length ptr)
+                                                  else Nothing)
+                where convert : Ptr -> Nat -> Nat -> Maybe (List a)
                       convert ptr idx length =
-                        if idx == length then []
-                        else
-                          (let val = f (indexArray ptr idx)
-                          in val :: assert_total (convert ptr (S idx) length))
+                        if idx == length then Just []
+                        else (::) <$> f (indexArray ptr idx)
+                                  <*> assert_total (convert ptr (S idx) length)
+
+isObjectCheck : String
+isObjectCheck = "typeof %0 == \"object\" && %0 != null"
 
 %hint
 export
 fromJSRecNil : FromJS (Record [])
-fromJSRecNil = FromJSFun (const RecNil)
+fromJSRecNil = withCheck isObjectCheck (const RecNil) 
 
 accessObject : Ptr -> String -> Ptr
-accessObject ptr str =
-  let io = jscall "(%0)[%1]" (Ptr -> String -> JS_IO Ptr) ptr str
-  in unsafePerformIO io
+accessObject p = unsafePerformIO . jscall "(%0)[%1]" (Ptr -> String -> JS_IO Ptr) p
 
 export
 %hint
@@ -70,10 +94,16 @@ fromJSRecord : FromJS t -> FromJS (Record xs) -> FromJS (Record ((k, t)::xs))
 fromJSRecord {k} (FromJSFun ft) (FromJSFun fxs) = FromJSFun (\ptr =>
               let rec = fxs ptr
               in let fieldPtr = accessObject ptr k
-              in RecCons k (ft fieldPtr) rec)
+              in RecCons k <$> (ft fieldPtr) <*> rec)
 
 export
-fromJS : {auto fjs: FromJS to} -> Ptr -> to
+partial
+fromJSUnsafe : {auto fjs: FromJS to} -> Ptr -> to
+fromJSUnsafe {fjs=FromJSFun f} ptr = case (f ptr) of
+                                          Just to => to
+
+export
+fromJS : {auto fjs: FromJS to} -> Ptr -> Maybe to
 fromJS {fjs=FromJSFun f} ptr = f ptr
 
 public export
