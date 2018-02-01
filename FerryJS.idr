@@ -20,14 +20,16 @@ data FromJS : Type -> Type where
 toBool : Ptr -> Bool
 toBool ptr = believe_me {b=Int} ptr >= 1
 
-
+%inline
 check : String -> Ptr -> Bool
 check c ptr = unsafePerformIO $ map toBool $ jscall c (Ptr -> JS_IO Ptr) ptr
 
+%inline
 withCheck : String -> (Ptr -> t) -> FromJS t
 withCheck c f = FromJSFun (\ptr => if check c ptr then Just (f ptr)
                                                   else Nothing)
                     
+%inline
 withTypeOfCheck : String -> (Ptr -> t) -> FromJS t
 withTypeOfCheck type = withCheck ("typeof %0 == \"" ++ type ++ "\"")
 
