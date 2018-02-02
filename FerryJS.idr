@@ -141,18 +141,18 @@ toJSPtr = ToJSFn id
 
 %hint
 export
-fromIntToJS : ToJS Int
-fromIntToJS = ToJSFn believe_me
+toJSInt : ToJS Int
+toJSInt = ToJSFn believe_me
 
 %hint
 export
-fromStringToJS : ToJS String
-fromStringToJS = ToJSFn believe_me
+toJSString : ToJS String
+toJSString = ToJSFn believe_me
 
 %hint
 export
-fromDoubleToJS : ToJS Double
-fromDoubleToJS = ToJSFn believe_me
+toJSDouble : ToJS Double
+toJSDouble = ToJSFn believe_me
 
 %inline
 pureJSValue : String -> Ptr
@@ -160,16 +160,16 @@ pureJSValue expr = unsafePerformIO $ jscall expr (JS_IO Ptr)
 
 %hint
 export
-fromBoolToJS : ToJS Bool
-fromBoolToJS = ToJSFn (\b =>
+toJSBool : ToJS Bool
+toJSBool = ToJSFn (\b =>
                 if b
                   then pureJSValue "true"
                   else pureJSValue "false")
 
 %hint
 export
-fromMaybeToJS : ToJS a -> ToJS (Maybe a)
-fromMaybeToJS (ToJSFn f) = ToJSFn (\m => case m of
+toJSMaybe : ToJS a -> ToJS (Maybe a)
+toJSMaybe (ToJSFn f) = ToJSFn (\m => case m of
               Nothing => pureJSValue "null"
               Just x => f x)
 
@@ -186,8 +186,8 @@ push = jscall "%0.push(%1)" (Ptr -> Ptr -> JS_IO ())
 -- we may use unsafePerformIO.
 %hint
 export
-fromListToJS : ToJS a -> ToJS (List a)
-fromListToJS (ToJSFn f) =
+toJSList : ToJS a -> ToJS (List a)
+toJSList (ToJSFn f) =
   ToJSFn (unsafePerformIO . foldl append empty_)
     where append : JS_IO Ptr -> a -> JS_IO Ptr
           append io val = do
@@ -197,8 +197,8 @@ fromListToJS (ToJSFn f) =
 
 %hint
 export
-fromTupleToJS : ToJS a -> ToJS b -> ToJS (a, b)
-fromTupleToJS (ToJSFn f1) (ToJSFn f2) =
+toJSTuple : ToJS a -> ToJS b -> ToJS (a, b)
+toJSTuple (ToJSFn f1) (ToJSFn f2) =
   ToJSFn (\(a, b) =>
     unsafePerformIO $ do
       arr <- empty_
@@ -209,8 +209,8 @@ fromTupleToJS (ToJSFn f1) (ToJSFn f2) =
 
 %hint
 export
-fromRecNilToJS : ToJS (Record [])
-fromRecNilToJS= ToJSFn (\RecNil => pureJSValue "{}")
+toJSRecNil : ToJS (Record [])
+toJSRecNil = ToJSFn (\RecNil => pureJSValue "{}")
 
 setObjectField : Ptr -> String -> Ptr -> JS_IO ()
 setObjectField = jscall "(%0)[%1] = %2" (Ptr -> String -> Ptr -> JS_IO ()) 
@@ -218,8 +218,8 @@ setObjectField = jscall "(%0)[%1] = %2" (Ptr -> String -> Ptr -> JS_IO ())
 -- See comment above the 'ToJS (List a)' implementation
 %hint
 export
-fromRecordToJS : ToJS t -> ToJS (Record xs) -> ToJS (Record ((k, t)::xs))
-fromRecordToJS (ToJSFn ft) (ToJSFn fxs) = 
+toJSRecord : ToJS t -> ToJS (Record xs) -> ToJS (Record ((k, t)::xs))
+toJSRecord (ToJSFn ft) (ToJSFn fxs) = 
   ToJSFn (\(RecCons key val rest) => let obj = fxs rest
                                       in unsafePerformIO $ do
                                         setObjectField obj key (ft val)
