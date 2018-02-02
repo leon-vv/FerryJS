@@ -38,33 +38,33 @@ withTypeOfCheck type = withCheck ("typeof %0 == \"" ++ type ++ "\"")
 
 %hint
 export
-fromJSPtr : ToIdris Ptr
-fromJSPtr = ToIdrisFn (Just . id)
+toIdrisPtr : ToIdris Ptr
+toIdrisPtr = ToIdrisFn (Just . id)
 
 %hint
 export
-fromJSToString : ToIdris String
-fromJSToString = withTypeOfCheck "string" believe_me
+toIdrisString : ToIdris String
+toIdrisString = withTypeOfCheck "string" believe_me
 
 %hint
 export
-fromJSToInt : ToIdris Int
-fromJSToInt = withTypeOfCheck "number" believe_me
+toIdrisInt : ToIdris Int
+toIdrisInt = withTypeOfCheck "number" believe_me
 
 %hint
 export
-fromJSToDouble : ToIdris Double
-fromJSToDouble = withTypeOfCheck "number" believe_me
+toIdrisDouble : ToIdris Double
+toIdrisDouble = withTypeOfCheck "number" believe_me
 
 %hint
 export
-fromJSToBool : ToIdris Bool
-fromJSToBool = withTypeOfCheck "boolean" toBool 
+toIdrisBool : ToIdris Bool
+toIdrisBool = withTypeOfCheck "boolean" toBool 
 
 %hint
 export
-fromJSToMaybe : ToIdris a -> ToIdris (Maybe a)
-fromJSToMaybe (ToIdrisFn f) = withCheck "%0 != null" f
+toIdrisMaybe : ToIdris a -> ToIdris (Maybe a)
+toIdrisMaybe (ToIdrisFn f) = withCheck "%0 != null" f
 
 
 indexArray : Ptr -> Nat -> Ptr
@@ -78,8 +78,8 @@ arrayCheck = check ("typeof %0 == \"object\" && %0.constructor.name == \"Array\"
     
 %hint
 export
-fromJSToList : ToIdris a -> ToIdris (List a)
-fromJSToList (ToIdrisFn f) = ToIdrisFn (\ptr => if arrayCheck ptr
+toIdrisList : ToIdris a -> ToIdris (List a)
+toIdrisList (ToIdrisFn f) = ToIdrisFn (\ptr => if arrayCheck ptr
                                                   then convert ptr Z (length ptr)
                                                   else Nothing)
                 where convert : Ptr -> Nat -> Nat -> Maybe (List a)
@@ -90,8 +90,8 @@ fromJSToList (ToIdrisFn f) = ToIdrisFn (\ptr => if arrayCheck ptr
 
 %hint
 export
-fromJSToTuple : ToIdris a -> ToIdris b -> ToIdris (a, b)
-fromJSToTuple (ToIdrisFn f1) (ToIdrisFn f2) =
+toIdrisTuple : ToIdris a -> ToIdris b -> ToIdris (a, b)
+toIdrisTuple (ToIdrisFn f1) (ToIdrisFn f2) =
   ToIdrisFn (\ptr =>
     if arrayCheck ptr && length ptr == 2
        then case (f1 (indexArray ptr 0), f2 (indexArray ptr 1)) of
@@ -105,29 +105,29 @@ isObjectCheck = "typeof %0 == \"object\" && %0 != null"
 
 %hint
 export
-fromJSRecNil : ToIdris (Record [])
-fromJSRecNil = withCheck isObjectCheck (const RecNil) 
+toIdrisRecNil : ToIdris (Record [])
+toIdrisRecNil = withCheck isObjectCheck (const RecNil) 
 
 accessObject : Ptr -> String -> Ptr
 accessObject p = unsafePerformIO . jscall "(%0)[%1]" (Ptr -> String -> JS_IO Ptr) p
 
 export
 %hint
-fromJSRecord : ToIdris t -> ToIdris (Record xs) -> ToIdris (Record ((k, t)::xs))
-fromJSRecord {k} (ToIdrisFn ft) (ToIdrisFn fxs) = ToIdrisFn (\ptr =>
+toIdrisRecord : ToIdris t -> ToIdris (Record xs) -> ToIdris (Record ((k, t)::xs))
+toIdrisRecord {k} (ToIdrisFn ft) (ToIdrisFn fxs) = ToIdrisFn (\ptr =>
               let rec = fxs ptr
               in let fieldPtr = accessObject ptr k
               in RecCons k <$> (ft fieldPtr) <*> rec)
 
 export
 partial
-fromJSUnsafe : {auto fjs: ToIdris to} -> Ptr -> to
-fromJSUnsafe {fjs=ToIdrisFn f} ptr = case (f ptr) of
+toIdrisUnsafe : {auto fjs: ToIdris to} -> Ptr -> to
+toIdrisUnsafe {fjs=ToIdrisFn f} ptr = case (f ptr) of
                                           Just to => to
 
 export
-fromJS : {auto fjs: ToIdris to} -> Ptr -> Maybe to
-fromJS {fjs=ToIdrisFn f} ptr = f ptr
+toIdris : {auto fjs: ToIdris to} -> Ptr -> Maybe to
+toIdris {fjs=ToIdrisFn f} ptr = f ptr
 
 -- See comment above 'ToIdris'
 public export
