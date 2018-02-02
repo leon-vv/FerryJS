@@ -58,6 +58,12 @@ export
 fromJSToBool : FromJS Bool
 fromJSToBool = withTypeOfCheck "boolean" toBool 
 
+%hint
+export
+fromJSToMaybe : FromJS a -> FromJS (Maybe a)
+fromJSToMaybe (FromJSFun f) = withCheck "%0 != null" f
+
+
 indexArray : Ptr -> Nat -> Ptr
 indexArray ptr idx = unsafePerformIO $ jscall "(%0)[%1]" (Ptr -> Int -> JS_IO Ptr) ptr (cast idx)
 
@@ -66,7 +72,7 @@ length ptr = cast $ unsafePerformIO $ jscall "%0.length" (Ptr -> JS_IO Int) ptr
 
 arrayCheck : Ptr -> Bool
 arrayCheck = check ("typeof %0 == \"object\" && %0.constructor.name == \"Array\"")
-
+    
 %hint
 export
 fromJSToList : FromJS a -> FromJS (List a)
@@ -120,6 +126,8 @@ export
 fromJS : {auto fjs: FromJS to} -> Ptr -> Maybe to
 fromJS {fjs=FromJSFun f} ptr = f ptr
 
+
+
 public export
 data ToJS : Type -> Type where
   ToJSFun : (t -> Ptr) -> ToJS t
@@ -144,13 +152,24 @@ export
 fromDoubleToJS : ToJS Double
 fromDoubleToJS = ToJSFun believe_me
 
+%inline
+pureJSValue : String -> Ptr
+pureJSValue expr = unsafePerformIO $ jscall expr (JS_IO Ptr)
+
 %hint
 export
 fromBoolToJS : ToJS Bool
-fromBoolToJS = ToJSFun convert
-  where convert : Bool -> Ptr
-        convert True = unsafePerformIO $ jscall "true" (JS_IO Ptr)
-        convert False = unsafePerformIO $ jscall "false" (JS_IO Ptr)
+fromBoolToJS = ToJSFun (\b =>
+                if b
+                  then pureJSValue "true"
+                  else pureJSValue "false")
+
+%hint
+export
+fromMaybeToJS : ToJS a -> ToJS (Maybe a)
+fromMaybeToJS (ToJSFun f) = ToJSFun (\m => case m of
+              Nothing => pureJSValue "null"
+              Just x => f x)
 
 empty_ : JS_IO Ptr
 empty_ = jscall "new Array()" (JS_IO Ptr)
@@ -189,7 +208,7 @@ fromTupleToJS (ToJSFun f1) (ToJSFun f2) =
 %hint
 export
 fromRecNilToJS : ToJS (Record [])
-fromRecNilToJS= ToJSFun (\RecNil => unsafePerformIO $ jscall "{}" (JS_IO Ptr))
+fromRecNilToJS= ToJSFun (\RecNil => pureJSValue "{}")
 
 setObjectField : Ptr -> String -> Ptr -> JS_IO ()
 setObjectField = jscall "(%0)[%1] = %2" (Ptr -> String -> Ptr -> JS_IO ()) 
