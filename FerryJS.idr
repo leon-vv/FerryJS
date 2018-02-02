@@ -79,6 +79,18 @@ fromJSToList (FromJSFun f) = FromJSFun (\ptr => if arrayCheck ptr
                         else (::) <$> f (indexArray ptr idx)
                                   <*> assert_total (convert ptr (S idx) length)
 
+%hint
+export
+fromJSToTuple : FromJS a -> FromJS b -> FromJS (a, b)
+fromJSToTuple (FromJSFun f1) (FromJSFun f2) =
+  FromJSFun (\ptr =>
+    if arrayCheck ptr && length ptr == 2
+       then case (f1 (indexArray ptr 0), f2 (indexArray ptr 1)) of
+                 (Just val1, Just val2) => Just (val1, val2)
+                 _ => Nothing
+        else Nothing)
+
+
 isObjectCheck : String
 isObjectCheck = "typeof %0 == \"object\" && %0 != null"
 
@@ -161,6 +173,18 @@ fromListToJS (ToJSFun f) =
             arr <- io
             push arr (f val)
             pure arr
+
+%hint
+export
+fromTupleToJS : ToJS a -> ToJS b -> ToJS (a, b)
+fromTupleToJS (ToJSFun f1) (ToJSFun f2) =
+  ToJSFun (\(a, b) =>
+    unsafePerformIO $ do
+      arr <- empty_
+      push arr (f1 a)
+      push arr (f2 b)
+      pure arr)
+
 
 %hint
 export
