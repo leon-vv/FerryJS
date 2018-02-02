@@ -12,9 +12,12 @@ export
 stringify : Ptr -> String
 stringify = unsafePerformIO . jscall "JSON.stringify(%0)" (Ptr -> JS_IO String)
 
+-- Could not be declared as ToIdris a = (Ptr -> Maybe a)
+-- because a chance exists that, when using auto, Idris
+-- builds a 'random' function of that type.
 public export
-data FromJS : Type -> Type where
-  FromJSFun : (Ptr -> Maybe t) -> FromJS t
+data ToIdris : Type -> Type where
+  ToIdrisFn : (Ptr -> Maybe t) -> ToIdris t
 
 -- Unsafe
 toBool : Ptr -> Bool
@@ -25,43 +28,43 @@ check : String -> Ptr -> Bool
 check c ptr = unsafePerformIO $ map toBool $ jscall c (Ptr -> JS_IO Ptr) ptr
 
 %inline
-withCheck : String -> (Ptr -> t) -> FromJS t
-withCheck c f = FromJSFun (\ptr => if check c ptr then Just (f ptr)
+withCheck : String -> (Ptr -> t) -> ToIdris t
+withCheck c f = ToIdrisFn (\ptr => if check c ptr then Just (f ptr)
                                                   else Nothing)
                     
 %inline
-withTypeOfCheck : String -> (Ptr -> t) -> FromJS t
+withTypeOfCheck : String -> (Ptr -> t) -> ToIdris t
 withTypeOfCheck type = withCheck ("typeof %0 == \"" ++ type ++ "\"")
 
 %hint
 export
-fromJSPtr : FromJS Ptr
-fromJSPtr = FromJSFun (Just . id)
+fromJSPtr : ToIdris Ptr
+fromJSPtr = ToIdrisFn (Just . id)
 
 %hint
 export
-fromJSToString : FromJS String
+fromJSToString : ToIdris String
 fromJSToString = withTypeOfCheck "string" believe_me
 
 %hint
 export
-fromJSToInt : FromJS Int
+fromJSToInt : ToIdris Int
 fromJSToInt = withTypeOfCheck "number" believe_me
 
 %hint
 export
-fromJSToDouble : FromJS Double
+fromJSToDouble : ToIdris Double
 fromJSToDouble = withTypeOfCheck "number" believe_me
 
 %hint
 export
-fromJSToBool : FromJS Bool
+fromJSToBool : ToIdris Bool
 fromJSToBool = withTypeOfCheck "boolean" toBool 
 
 %hint
 export
-fromJSToMaybe : FromJS a -> FromJS (Maybe a)
-fromJSToMaybe (FromJSFun f) = withCheck "%0 != null" f
+fromJSToMaybe : ToIdris a -> ToIdris (Maybe a)
+fromJSToMaybe (ToIdrisFn f) = withCheck "%0 != null" f
 
 
 indexArray : Ptr -> Nat -> Ptr
@@ -75,8 +78,8 @@ arrayCheck = check ("typeof %0 == \"object\" && %0.constructor.name == \"Array\"
     
 %hint
 export
-fromJSToList : FromJS a -> FromJS (List a)
-fromJSToList (FromJSFun f) = FromJSFun (\ptr => if arrayCheck ptr
+fromJSToList : ToIdris a -> ToIdris (List a)
+fromJSToList (ToIdrisFn f) = ToIdrisFn (\ptr => if arrayCheck ptr
                                                   then convert ptr Z (length ptr)
                                                   else Nothing)
                 where convert : Ptr -> Nat -> Nat -> Maybe (List a)
@@ -87,9 +90,9 @@ fromJSToList (FromJSFun f) = FromJSFun (\ptr => if arrayCheck ptr
 
 %hint
 export
-fromJSToTuple : FromJS a -> FromJS b -> FromJS (a, b)
-fromJSToTuple (FromJSFun f1) (FromJSFun f2) =
-  FromJSFun (\ptr =>
+fromJSToTuple : ToIdris a -> ToIdris b -> ToIdris (a, b)
+fromJSToTuple (ToIdrisFn f1) (ToIdrisFn f2) =
+  ToIdrisFn (\ptr =>
     if arrayCheck ptr && length ptr == 2
        then case (f1 (indexArray ptr 0), f2 (indexArray ptr 1)) of
                  (Just val1, Just val2) => Just (val1, val2)
@@ -102,7 +105,7 @@ isObjectCheck = "typeof %0 == \"object\" && %0 != null"
 
 %hint
 export
-fromJSRecNil : FromJS (Record [])
+fromJSRecNil : ToIdris (Record [])
 fromJSRecNil = withCheck isObjectCheck (const RecNil) 
 
 accessObject : Ptr -> String -> Ptr
@@ -110,47 +113,46 @@ accessObject p = unsafePerformIO . jscall "(%0)[%1]" (Ptr -> String -> JS_IO Ptr
 
 export
 %hint
-fromJSRecord : FromJS t -> FromJS (Record xs) -> FromJS (Record ((k, t)::xs))
-fromJSRecord {k} (FromJSFun ft) (FromJSFun fxs) = FromJSFun (\ptr =>
+fromJSRecord : ToIdris t -> ToIdris (Record xs) -> ToIdris (Record ((k, t)::xs))
+fromJSRecord {k} (ToIdrisFn ft) (ToIdrisFn fxs) = ToIdrisFn (\ptr =>
               let rec = fxs ptr
               in let fieldPtr = accessObject ptr k
               in RecCons k <$> (ft fieldPtr) <*> rec)
 
 export
 partial
-fromJSUnsafe : {auto fjs: FromJS to} -> Ptr -> to
-fromJSUnsafe {fjs=FromJSFun f} ptr = case (f ptr) of
+fromJSUnsafe : {auto fjs: ToIdris to} -> Ptr -> to
+fromJSUnsafe {fjs=ToIdrisFn f} ptr = case (f ptr) of
                                           Just to => to
 
 export
-fromJS : {auto fjs: FromJS to} -> Ptr -> Maybe to
-fromJS {fjs=FromJSFun f} ptr = f ptr
+fromJS : {auto fjs: ToIdris to} -> Ptr -> Maybe to
+fromJS {fjs=ToIdrisFn f} ptr = f ptr
 
-
-
+-- See comment above 'ToIdris'
 public export
 data ToJS : Type -> Type where
-  ToJSFun : (t -> Ptr) -> ToJS t
+  ToJSFn : (t -> Ptr) -> ToJS t
 
 %hint
 export
 toJSPtr : ToJS Ptr
-toJSPtr = ToJSFun id
+toJSPtr = ToJSFn id
 
 %hint
 export
 fromIntToJS : ToJS Int
-fromIntToJS = ToJSFun believe_me
+fromIntToJS = ToJSFn believe_me
 
 %hint
 export
 fromStringToJS : ToJS String
-fromStringToJS = ToJSFun believe_me
+fromStringToJS = ToJSFn believe_me
 
 %hint
 export
 fromDoubleToJS : ToJS Double
-fromDoubleToJS = ToJSFun believe_me
+fromDoubleToJS = ToJSFn believe_me
 
 %inline
 pureJSValue : String -> Ptr
@@ -159,7 +161,7 @@ pureJSValue expr = unsafePerformIO $ jscall expr (JS_IO Ptr)
 %hint
 export
 fromBoolToJS : ToJS Bool
-fromBoolToJS = ToJSFun (\b =>
+fromBoolToJS = ToJSFn (\b =>
                 if b
                   then pureJSValue "true"
                   else pureJSValue "false")
@@ -167,7 +169,7 @@ fromBoolToJS = ToJSFun (\b =>
 %hint
 export
 fromMaybeToJS : ToJS a -> ToJS (Maybe a)
-fromMaybeToJS (ToJSFun f) = ToJSFun (\m => case m of
+fromMaybeToJS (ToJSFn f) = ToJSFn (\m => case m of
               Nothing => pureJSValue "null"
               Just x => f x)
 
@@ -185,8 +187,8 @@ push = jscall "%0.push(%1)" (Ptr -> Ptr -> JS_IO ())
 %hint
 export
 fromListToJS : ToJS a -> ToJS (List a)
-fromListToJS (ToJSFun f) =
-  ToJSFun (unsafePerformIO . foldl append empty_)
+fromListToJS (ToJSFn f) =
+  ToJSFn (unsafePerformIO . foldl append empty_)
     where append : JS_IO Ptr -> a -> JS_IO Ptr
           append io val = do
             arr <- io
@@ -196,8 +198,8 @@ fromListToJS (ToJSFun f) =
 %hint
 export
 fromTupleToJS : ToJS a -> ToJS b -> ToJS (a, b)
-fromTupleToJS (ToJSFun f1) (ToJSFun f2) =
-  ToJSFun (\(a, b) =>
+fromTupleToJS (ToJSFn f1) (ToJSFn f2) =
+  ToJSFn (\(a, b) =>
     unsafePerformIO $ do
       arr <- empty_
       push arr (f1 a)
@@ -208,7 +210,7 @@ fromTupleToJS (ToJSFun f1) (ToJSFun f2) =
 %hint
 export
 fromRecNilToJS : ToJS (Record [])
-fromRecNilToJS= ToJSFun (\RecNil => pureJSValue "{}")
+fromRecNilToJS= ToJSFn (\RecNil => pureJSValue "{}")
 
 setObjectField : Ptr -> String -> Ptr -> JS_IO ()
 setObjectField = jscall "(%0)[%1] = %2" (Ptr -> String -> Ptr -> JS_IO ()) 
@@ -217,14 +219,14 @@ setObjectField = jscall "(%0)[%1] = %2" (Ptr -> String -> Ptr -> JS_IO ())
 %hint
 export
 fromRecordToJS : ToJS t -> ToJS (Record xs) -> ToJS (Record ((k, t)::xs))
-fromRecordToJS (ToJSFun ft) (ToJSFun fxs) = 
-  ToJSFun (\(RecCons key val rest) => let obj = fxs rest
+fromRecordToJS (ToJSFn ft) (ToJSFn fxs) = 
+  ToJSFn (\(RecCons key val rest) => let obj = fxs rest
                                       in unsafePerformIO $ do
                                         setObjectField obj key (ft val)
                                         pure obj)
 export
 toJS : {auto tjs: ToJS t} -> t -> Ptr
-toJS {tjs=ToJSFun f} val = f val
+toJS {tjs=ToJSFn f} val = f val
 
 
 
