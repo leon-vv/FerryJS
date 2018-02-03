@@ -121,13 +121,13 @@ toIdrisRecord {k} (ToIdrisFn ft) (ToIdrisFn fxs) = ToIdrisFn (\ptr =>
 
 export
 partial
-toIdrisUnsafe : {auto fjs: ToIdris to} -> Ptr -> to
-toIdrisUnsafe {fjs=ToIdrisFn f} ptr = case (f ptr) of
+toIdrisUnsafe : {auto ti: ToIdris to} -> Ptr -> to
+toIdrisUnsafe {ti=ToIdrisFn f} ptr = case (f ptr) of
                                           Just to => to
 
 export
-toIdris : {auto fjs: ToIdris to} -> Ptr -> Maybe to
-toIdris {fjs=ToIdrisFn f} ptr = f ptr
+toIdris : {auto ti: ToIdris to} -> Ptr -> Maybe to
+toIdris {ti=ToIdrisFn f} ptr = f ptr
 
 -- See comment above 'ToIdris'
 public export
