@@ -16,13 +16,13 @@ log = jscall "console.log(%0)" (Ptr -> JS_IO ())
 main : JS_IO ()
 main = do
   arr <- array 
-  (let lst = fromJSUnsafe {to=List Int} arr
+  (let lst = toIdrisUnsafe {to=List Int} arr
    in do
      printLn' lst
      log (toJS lst))
 
   obj <- object
-  (let rec = fromJSUnsafe {to=Record schema} obj
+  (let rec = toIdrisUnsafe {to=Record schema} obj
    in do
      printLn' (showRecord rec)
      log (toJS rec))
