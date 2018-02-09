@@ -53,6 +53,16 @@ toIdrisInt = withTypeOfCheck "number" believe_me
 
 %hint
 export
+toIdrisNat : ToIdris Nat
+toIdrisNat = ToIdrisFn (\ptr => 
+  let (ToIdrisFn toInt) = toIdrisInt
+  in do
+    i <- toInt ptr
+    (if i >= 0 then Just . cast $ i
+               else Nothing))
+
+%hint
+export
 toIdrisDouble : ToIdris Double
 toIdrisDouble = withTypeOfCheck "number" believe_me
 
@@ -70,18 +80,18 @@ toIdrisMaybe (ToIdrisFn f) = withCheck "%0 != null" f
 indexArray : Ptr -> Nat -> Ptr
 indexArray ptr idx = unsafePerformIO $ jscall "(%0)[%1]" (Ptr -> Int -> JS_IO Ptr) ptr (cast idx)
 
-length : Ptr -> Nat
-length ptr = cast $ unsafePerformIO $ jscall "%0.length" (Ptr -> JS_IO Int) ptr
+-- Accessing length only throws an error if the value is null or undefined
+length : Ptr -> Maybe Nat
+length ptr = 
+  let (ToIdrisFn toNat) = toIdrisNat
+  in if check "%0 == undefined || %0 == null" ptr
+        then Nothing
+        else unsafePerformIO . map toNat . jscall "%0.length" (Ptr -> JS_IO Ptr) $ ptr
 
-arrayCheck : Ptr -> Bool
-arrayCheck = check ("typeof %0 == \"object\" && %0.constructor.name == \"Array\"")
-    
 %hint
 export
 toIdrisList : ToIdris a -> ToIdris (List a)
-toIdrisList (ToIdrisFn f) = ToIdrisFn (\ptr => if arrayCheck ptr
-                                                  then convert ptr Z (length ptr)
-                                                  else Nothing)
+toIdrisList (ToIdrisFn f) = ToIdrisFn (\ptr => (length ptr) >>= (convert ptr Z))
                 where convert : Ptr -> Nat -> Nat -> Maybe (List a)
                       convert ptr idx length =
                         if idx == length then Just []
@@ -93,11 +103,11 @@ export
 toIdrisTuple : ToIdris a -> ToIdris b -> ToIdris (a, b)
 toIdrisTuple (ToIdrisFn f1) (ToIdrisFn f2) =
   ToIdrisFn (\ptr =>
-    if arrayCheck ptr && length ptr == 2
-       then case (f1 (indexArray ptr 0), f2 (indexArray ptr 1)) of
-                 (Just val1, Just val2) => Just (val1, val2)
-                 _ => Nothing
-        else Nothing)
+    if length ptr == Just 2
+      then case (f1 (indexArray ptr 0), f2 (indexArray ptr 1)) of
+              (Just val1, Just val2) => Just (val1, val2)
+              _ => Nothing
+      else Nothing)
 
 
 isObjectCheck : String
