@@ -2,4 +2,4 @@ package ferryjs
 
 pkgs = record_
 
-modules = FerryJS
+modules = FerryJS, FerryJS.Util
