@@ -74,8 +74,9 @@ toIdrisBool = withTypeOfCheck "boolean" toBool
 %hint
 export
 toIdrisMaybe : ToIdris a -> ToIdris (Maybe a)
-toIdrisMaybe (ToIdrisFn f) = withCheck "%0 != null" f
-
+toIdrisMaybe (ToIdrisFn f) =  ToIdrisFn (\ptr =>
+  if check "(%0) === null || (%0) === undefined" ptr then Just Nothing
+                                                 else Just (f ptr))
 
 indexArray : Ptr -> Nat -> Ptr
 indexArray ptr idx = unsafePerformIO $ jscall "(%0)[%1]" (Ptr -> Int -> JS_IO Ptr) ptr (cast idx)
