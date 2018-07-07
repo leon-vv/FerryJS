@@ -34,7 +34,7 @@ withCheck c f = ToIdrisFn (\ptr => if check c ptr then Just (f ptr)
                     
 %inline
 withTypeOfCheck : String -> (Ptr -> t) -> ToIdris t
-withTypeOfCheck type = withCheck ("typeof %0 == \"" ++ type ++ "\"")
+withTypeOfCheck type = withCheck ("typeof (%0) == \"" ++ type ++ "\"")
 
 %hint
 export
@@ -84,9 +84,9 @@ indexArray ptr idx = unsafePerformIO $ jscall "(%0)[%1]" (Ptr -> Int -> JS_IO Pt
 length : Ptr -> Maybe Nat
 length ptr = 
   let (ToIdrisFn toNat) = toIdrisNat
-  in if check "%0 == undefined || %0 == null" ptr
+  in if check "(%0) == undefined || (%0) == null" ptr
         then Nothing
-        else unsafePerformIO . map toNat . jscall "%0.length" (Ptr -> JS_IO Ptr) $ ptr
+        else unsafePerformIO . map toNat . jscall "(%0).length" (Ptr -> JS_IO Ptr) $ ptr
 
 %hint
 export
@@ -111,7 +111,7 @@ toIdrisTuple (ToIdrisFn f1) (ToIdrisFn f2) =
 
 
 isObjectCheck : String
-isObjectCheck = "typeof %0 == \"object\" && %0 != null"
+isObjectCheck = "typeof (%0) == \"object\" && (%0) != null"
 
 %hint
 export
@@ -187,7 +187,7 @@ empty_ : JS_IO Ptr
 empty_ = jscall "new Array()" (JS_IO Ptr)
 
 push : Ptr -> Ptr -> JS_IO ()
-push = jscall "%0.push(%1)" (Ptr -> Ptr -> JS_IO ())
+push = jscall "(%0).push(%1)" (Ptr -> Ptr -> JS_IO ())
 
 -- This functions has no side effects since
 -- the array is created here and not referenced
