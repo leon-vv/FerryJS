@@ -131,14 +131,14 @@ toIdrisRecord {k} (ToIdrisFn ft) (ToIdrisFn fxs) = ToIdrisFn (\ptr =>
               in RecCons k <$> (ft fieldPtr) <*> rec)
 
 export
-partial
-toIdrisUnsafe : {auto ti: ToIdris to} -> Ptr -> to
-toIdrisUnsafe {ti=ToIdrisFn f} ptr = case (f ptr) of
-                                          Just to => to
-
-export
 toIdris : {auto ti: ToIdris to} -> Ptr -> Maybe to
 toIdris {ti=ToIdrisFn f} ptr = f ptr
+
+export
+partial
+toIdrisUnsafe : {auto ti: ToIdris to} -> Ptr -> to
+toIdrisUnsafe {ti} ptr = case toIdris {ti=ti} ptr of
+                          Just to => to
 
 -- See comment above 'ToIdris'
 public export

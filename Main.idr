@@ -7,10 +7,16 @@ array : JS_IO Ptr
 array = jscall "[1, 2, 3]" (JS_IO Ptr)
 
 object : JS_IO Ptr
-object = jscall "{a: 10, b: \"abc\"}" (JS_IO Ptr)
+object = jscall "{id: 10}" (JS_IO Ptr)
 
 schema : Schema
-schema = [("a", Int), ("b", String)]
+schema = [("id", Int)]
+
+object2 : JS_IO Ptr
+object2 = jscall "{id:'2', name:'some name'}" (JS_IO Ptr)
+
+schema2 : Schema
+schema2 = [("id", String), ("name", String), ("done", Maybe String)]
 
 nestedArray : JS_IO Ptr
 nestedArray = jscall "[1, [3, 5]]" (JS_IO Ptr)
@@ -28,6 +34,12 @@ main = do
    in do
      printLn' (showRecord rec)
      log (toJS rec))
+  
+  obj2 <- object2
+  (let rec2 = toIdrisUnsafe {to=Record schema2} obj2
+   in do
+     printLn' (showRecord rec2)
+     log (toJS rec2))
 
   nestedArr <- nestedArray
   (let tup = toIdrisUnsafe {to=(Int, Int, Int)} nestedArr
