@@ -1,23 +1,39 @@
 {- This Source Code Form is subject to the terms of the Mozilla Public
  - License, v. 2.0. If a copy of the MPL was not distributed with this
  - file, You can obtain one at http://mozilla.org/MPL/2.0/. -}
+
+module FerryJS
+
 import Record
+
+import Debug.Error
+
+-- To use the error function
+%language ElabReflection
 
 %default total
 
+||| Small wrapper around the `foreign` function.
+||| Inspired by the IdrisScript package.
 %inline
 export
 jscall : (fname : String) -> (ty : Type) ->
           {auto fty : FTy FFI_JS [] ty} -> ty
 jscall fname ty = foreign FFI_JS fname ty
 
+||| Use `JSON.stringify()` to convert the JavaScript value to a string.
+||| Can be useful for debugging.
 export
 stringify : Ptr -> String
 stringify = unsafePerformIO . jscall "JSON.stringify(%0)" (Ptr -> JS_IO String)
 
--- Could not be declared as ToIdris a = (Ptr -> Maybe a)
+-- Cannot be declared as ToIdris a = (Ptr -> Maybe a)
 -- because a chance exists that, when using auto, Idris
 -- builds a 'random' function of that type.
+||| A proof that a given Idris type can be converted
+||| from a certain JavaScript value. If the JavaScript
+||| value is not of the expected form the conversion 
+||| function should return `Nothing`.
 public export
 data ToIdris : Type -> Type where
   ToIdrisFn : (Ptr -> Maybe t) -> ToIdris t
@@ -133,17 +149,23 @@ toIdrisRecord {k} (ToIdrisFn ft) (ToIdrisFn fxs) = ToIdrisFn (\ptr =>
               in let fieldPtr = accessObject ptr k
               in RecCons k <$> (ft fieldPtr) <*> rec)
 
+||| If the compiler can prove that the requested
+||| Idris type can be converted from a JavaScript value,
+||| try the conversion.
 export
 toIdris : {auto ti: ToIdris to} -> Ptr -> Maybe to
 toIdris {ti=ToIdrisFn f} ptr = f ptr
 
+||| Throw a runtime error if the conversion fails.
 export
 partial
 toIdrisUnsafe : {auto ti: ToIdris to} -> Ptr -> to
 toIdrisUnsafe {ti} ptr = case toIdris {ti=ti} ptr of
                           Just to => to
+                          Nothing => error "Failed to convert JavaScript value to Idris"
 
 -- See comment above 'ToIdris'
+||| A proof that values of an Idris type can be converted to JavaScript.
 public export
 data ToJS : Type -> Type where
   ToJSFn : (t -> Ptr) -> ToJS t
