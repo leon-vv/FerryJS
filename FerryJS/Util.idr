@@ -15,3 +15,10 @@ log = jscall "console.log(%0)" (Ptr -> JS_IO ()) . believe_me
 export
 exit : Nat -> JS_IO ()
 exit code = jscall "process.exit(%0)" (Int -> JS_IO ()) (cast code)
+
+export
+getArgs : JS_IO (List String)
+getArgs =
+  toIdrisUnsafe {to=List String}
+    <$> jscall "process.argv" (JS_IO Ptr)
+
